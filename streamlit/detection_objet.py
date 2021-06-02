@@ -7,6 +7,11 @@ import urllib.request
 from pathlib import Path
 from typing import List, NamedTuple
 
+from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+import torch
+import torchvision
+
 try:
     from typing import Literal
 except ImportError:
@@ -14,6 +19,7 @@ except ImportError:
 
 import av
 import cv2
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
 import pydub
@@ -104,38 +110,53 @@ def app_object_detection():
     This model and code are based on
     https://github.com/robmarkcole/object-detection-app
     """
-    MODEL_URL = "https://github.com/robmarkcole/object-detection-app/raw/master/model/MobileNetSSD_deploy.caffemodel"  # noqa: E501
-    MODEL_LOCAL_PATH = HERE / "./models/MobileNetSSD_deploy.caffemodel"
-    PROTOTXT_URL = "https://github.com/robmarkcole/object-detection-app/raw/master/model/MobileNetSSD_deploy.prototxt.txt"  # noqa: E501
-    PROTOTXT_LOCAL_PATH = HERE / "./models/MobileNetSSD_deploy.prototxt.txt"
+    #MODEL_URL = "https://github.com/robmarkcole/object-detection-app/raw/master/model/MobileNetSSD_deploy.caffemodel"  # noqa: E501
+    #MODEL_LOCAL_PATH = HERE / "./models/MobileNetSSD_deploy.caffemodel"
+    #PROTOTXT_URL = "https://github.com/robmarkcole/object-detection-app/raw/master/model/MobileNetSSD_deploy.prototxt.txt"  # noqa: E501
+    #PROTOTXT_LOCAL_PATH = HERE / "./models/MobileNetSSD_deploy.prototxt.txt"
 
-    CLASSES = [
-        "background",
-        "aeroplane",
-        "bicycle",
-        "bird",
-        "boat",
-        "bottle",
-        "bus",
-        "car",
-        "cat",
-        "chair",
-        "cow",
-        "diningtable",
-        "dog",
-        "horse",
-        "motorbike",
-        "person",
-        "pottedplant",
-        "sheep",
-        "sofa",
-        "train",
-        "tvmonitor",
-    ]
-    COLORS = np.random.uniform(0, 255, size=(len(CLASSES), 3))
+#    CLASSES = [
+#        "background",
+#        "aeroplane",
+#        "bicycle",
+#        "bird",
+#        "boat",
+#        "bottle",
+#        "bus",
+#        "car",
+#        "cat",
+#        "chair",
+#        "cow",
+#        "diningtable",
+#        "dog",
+#        "horse",
+#        "motorbike",
+#        "person",
+#        "pottedplant",
+#        "sheep",
+#        "sofa",
+#        "train",
+#        "tvmonitor",
+#    ]
+    COCO_CATEGORY_NAMES = [
+    '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+    'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
+    'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+    'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
+    'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+    'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
+    'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
+    'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
+    'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
+    'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
+    'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+]
 
-    download_file(MODEL_URL, MODEL_LOCAL_PATH, expected_size=23147564)
-    download_file(PROTOTXT_URL, PROTOTXT_LOCAL_PATH, expected_size=29353)
+    COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3))
+
+#    download_file(MODEL_URL, MODEL_LOCAL_PATH, expected_size=23147564)
+#    download_file(PROTOTXT_URL, PROTOTXT_LOCAL_PATH, expected_size=29353)
 
     DEFAULT_CONFIDENCE_THRESHOLD = 0.5
 
@@ -148,59 +169,46 @@ def app_object_detection():
         result_queue: "queue.Queue[List[Detection]]"
 
         def __init__(self) -> None:
-            self._net = cv2.dnn.readNetFromCaffe(
-                str(PROTOTXT_LOCAL_PATH), str(MODEL_LOCAL_PATH)
-            )
+            self._net = torchvision.models.detection.fasterrcnn_resnet50_fpn(
+    pretrained=True,
+    box_score_thresh=DEFAULT_CONFIDENCE_THRESHOLD
+)
+            self._net.eval()
             self.confidence_threshold = DEFAULT_CONFIDENCE_THRESHOLD
             self.result_queue = queue.Queue()
 
-        def _annotate_image(self, image, detections):
-            # loop over the detections
-            (h, w) = image.shape[:2]
-            result: List[Detection] = []
-            for i in np.arange(0, detections.shape[2]):
-                confidence = detections[0, 0, i, 2]
+        def _annotate_image(self, image, target=None, category_names=None):
+            # Convert tensor to image and draw it.
+            np_img = (image.permute(1,2,0).cpu().numpy() * 255).astype('uint8')
+            im = Image.fromarray(np_img)
+            draw = ImageDraw.Draw(im)
 
-                if confidence > self.confidence_threshold:
-                    # extract the index of the class label from the `detections`,
-                    # then compute the (x, y)-coordinates of the bounding box for
-                    # the object
-                    idx = int(detections[0, 0, i, 1])
-                    box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-                    (startX, startY, endX, endY) = box.astype("int")
+            if target:
+                # Make sure the required font is available
+                font = ImageFont.truetype(font='Roboto-Regular.ttf', size=16)
 
-                    name = CLASSES[idx]
-                    result.append(Detection(name=name, prob=float(confidence)))
-
-                    # display the prediction
-                    label = f"{name}: {round(confidence * 100, 2)}%"
-                    cv2.rectangle(image, (startX, startY), (endX, endY), COLORS[idx], 2)
-                    y = startY - 15 if startY - 15 > 15 else startY + 15
-                    cv2.putText(
-                        image,
-                        label,
-                        (startX, y),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        COLORS[idx],
-                        2,
-                    )
-            return image, result
+                # Draw each bounding box in the target
+            for box, label in zip(target['boxes'], target['labels']):
+                box = box.detach().cpu().numpy()
+                draw.rectangle(box, outline='black')
+                label_str =  category_names[label.cpu().numpy()] if category_names else str(label.cpu().numpy()+2)
+                draw.text((box[0], box[1]), label_str, fill=(0,128,256,256), font=font)
+                result.append(Detection(name=label_str, prob=float(0.2)))
+            return im, result
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-            image = frame.to_ndarray(format="bgr24")
-            blob = cv2.dnn.blobFromImage(
-                cv2.resize(image, (300, 300)), 0.007843, (300, 300), 127.5
-            )
-            self._net.setInput(blob)
-            detections = self._net.forward()
-            annotated_image, result = self._annotate_image(image, detections)
+            image = frame.to_image()
+            img_tensor = torch.as_tensor(np.array(img) / 255) # Normalize input to [0, 1]
+            img_tensor = img_tensor.permute(2, 0, 1).float() # Reorder image axes to channel first
+            img_tensor = img_tensor[0:3]
+            detections = model([img_tensors])
+            annotated_image, result = self._annotate_image(img_tensor[0], detections[0], category_names=COCO_CATEGORY_NAMES)
 
             # NOTE: This `recv` method is called in another thread,
             # so it must be thread-safe.
             self.result_queue.put(result)
 
-            return av.VideoFrame.from_ndarray(annotated_image, format="bgr24")
+            return av.VideoFrame.from_image(annotated_image)
 
     webrtc_ctx = webrtc_streamer(
         key="object-detection",
