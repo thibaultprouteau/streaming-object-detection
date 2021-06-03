@@ -179,6 +179,7 @@ def app_object_detection():
 
         def _annotate_image(self, image, target=None, category_names=None):
             # Convert tensor to image and draw it.
+            result: List[Detection] = []
             np_img = (image.permute(1,2,0).cpu().numpy() * 255).astype('uint8')
             im = Image.fromarray(np_img)
             draw = ImageDraw.Draw(im)
@@ -198,11 +199,11 @@ def app_object_detection():
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
             image = frame.to_image()
-            img_tensor = torch.as_tensor(np.array(img) / 255) # Normalize input to [0, 1]
+            img_tensor = torch.as_tensor(np.array(image) / 255) # Normalize input to [0, 1]
             img_tensor = img_tensor.permute(2, 0, 1).float() # Reorder image axes to channel first
             img_tensor = img_tensor[0:3]
-            detections = model([img_tensors])
-            annotated_image, result = self._annotate_image(img_tensor[0], detections[0], category_names=COCO_CATEGORY_NAMES)
+            detections = self._net([img_tensor])
+            annotated_image, result = self._annotate_image(img_tensor, detections[0], category_names=COCO_CATEGORY_NAMES)
 
             # NOTE: This `recv` method is called in another thread,
             # so it must be thread-safe.
