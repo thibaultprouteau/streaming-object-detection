@@ -49,11 +49,10 @@ WEBRTC_CLIENT_SETTINGS = ClientSettings(
 
 
 def main():
-    st.header("WebRTC demo")
-
+    
     object_detection_page = "Détection d'objets en temps réel."
     app_mode = object_detection_page
-    st.subheader(object_detection_page)
+    st.header(object_detection_page)
     app_object_detection()
     
     logger.debug("=== Alive threads ===")
@@ -97,10 +96,12 @@ def app_object_detection():
         result_queue: "queue.Queue[List[Detection]]"
 
         def __init__(self) -> None:
+            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             self._net = torchvision.models.detection.fasterrcnn_resnet50_fpn(
     pretrained=True,
     box_score_thresh=DEFAULT_CONFIDENCE_THRESHOLD
 )
+            self._net.to(self.device)
             self._net.eval()
             self.confidence_threshold = DEFAULT_CONFIDENCE_THRESHOLD
             self.result_queue = queue.Queue()
@@ -128,6 +129,7 @@ def app_object_detection():
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
             image = frame.to_image()
             img_tensor = torch.as_tensor(np.array(image) / 255) # Normalize input to [0, 1]
+            img_tensor = img_tensor.to(self.device)
             img_tensor = img_tensor.permute(2, 0, 1).float() # Reorder image axes to channel first
             img_tensor = img_tensor[0:3]
             detections = self._net([img_tensor])
