@@ -82,7 +82,7 @@ def app_object_detection():
     'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ]
 
-    COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3))
+    COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
 
 
     DEFAULT_CONFIDENCE_THRESHOLD = 0.5
@@ -120,9 +120,10 @@ def app_object_detection():
                 # Draw each bounding box in the target
             for box, label in zip(target['boxes'], target['labels']):
                 box = box.detach().cpu().numpy()
-                draw.rectangle(box, outline='black')
-                label_str =  category_names[label.cpu().numpy()] if category_names else str(label.cpu().numpy()+2)
-                draw.text((box[0], box[1]), label_str, fill=(0,128,256,256), font=font) ## TODO: Passer la valeur de confiance de la prédiction.
+                category = label.cpu().numpy()
+                draw.rectangle(box, outline=tuple(COLORS[category]))
+                label_str =  COCO_CATEGORY_NAMES[category] if COCO_CATEGORY_NAMES else str(category)
+                draw.text((box[0], box[1]), label_str, fill=tuple(COLORS[category]), font=font) ## TODO: Passer la valeur de confiance de la prédiction.
                 result.append(Detection(name=label_str, prob=float(0.2))) ## TODO: prob doit prendre la valeur de confiance de la prédiction.
             return im, result
 
