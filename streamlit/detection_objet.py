@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 WEBRTC_CLIENT_SETTINGS = ClientSettings(
     rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-    media_stream_constraints={"video": True, "audio": True},
+    media_stream_constraints={"video": True, "audio": False},
 )
 
 
@@ -118,13 +118,14 @@ def app_object_detection():
                 font = ImageFont.truetype(font='Roboto-Regular.ttf', size=16)
 
                 # Draw each bounding box in the target
-            for box, label in zip(target['boxes'], target['labels']):
+            for box, label, score in zip(target['boxes'], target['labels'], target['scores']):
                 box = box.detach().cpu().numpy()
                 category = label.cpu().numpy()
                 draw.rectangle(box, outline=tuple(COLORS[category]))
-                label_str =  COCO_CATEGORY_NAMES[category] if COCO_CATEGORY_NAMES else str(category)
+                category_name =  COCO_CATEGORY_NAMES[category] if COCO_CATEGORY_NAMES else str(category)
+                label_str = f"{category_name} {score:1.2f}"
                 draw.text((box[0], box[1]), label_str, fill=tuple(COLORS[category]), font=font) ## TODO: Passer la valeur de confiance de la prédiction.
-                result.append(Detection(name=label_str, prob=float(0.2))) ## TODO: prob doit prendre la valeur de confiance de la prédiction.
+                result.append(Detection(name=label_str, prob=round(float(score), 2))) ## TODO: prob doit prendre la valeur de confiance de la prédiction.
             return im, result
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
