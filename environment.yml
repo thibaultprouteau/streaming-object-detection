@@ -127,4 +127,4 @@ dependencies:
     - webencodings==0.5.1
     - websocket-client==1.0.1
     - widgetsnbextension==3.5.1
-prefix: lium/buster1/tprouteau/miniconda3/envs/streamlit
+prefix: /lium/buster1/tprouteau/miniconda3/envs/streamlit
