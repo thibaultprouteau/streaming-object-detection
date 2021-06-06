@@ -6,11 +6,13 @@ import threading
 import urllib.request
 from pathlib import Path
 from typing import List, NamedTuple
+import random
 
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import torch
 import torchvision
+from torchvision.datasets.coco import CocoDetection
 
 try:
     from typing import Literal
@@ -18,8 +20,7 @@ except ImportError:
     from typing_extensions import Literal  # type: ignore
 
 import av
-import cv2
-import torch
+#import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pydub
@@ -41,33 +42,12 @@ logger = logging.getLogger(__name__)
 
 # This code is based on https://github.com/streamlit/demo-self-driving/blob/230245391f2dda0cb464008195a470751c01770b/streamlit_app.py#L48  # noqa: E501
 
-
 WEBRTC_CLIENT_SETTINGS = ClientSettings(
     rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
     media_stream_constraints={"video": True, "audio": False},
 )
 
-
-def main():
-    
-    object_detection_page = "Détection d'objets en temps réel."
-    app_mode = object_detection_page
-    st.header(object_detection_page)
-    app_object_detection()
-    
-    logger.debug("=== Alive threads ===")
-    for thread in threading.enumerate():
-        if thread.is_alive():
-            logger.debug(f"  {thread.name} ({thread.ident})")
-
-
-def app_object_detection():
-    """Object detection demo with MobileNet SSD.
-    This model and code are based on
-    https://github.com/robmarkcole/object-detection-app
-    """
-
-    COCO_CATEGORY_NAMES = [
+COCO_CATEGORY_NAMES = [
     '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
     'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
     'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
@@ -82,10 +62,113 @@ def app_object_detection():
     'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ]
 
-    COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
+ROOT_DIR = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/images"
+ANN_FILE = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/annotations/instances_train2014.json"
+
+COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
 
 
-    DEFAULT_CONFIDENCE_THRESHOLD = 0.5
+def main():
+    
+    dataset_explorer_page = "Exploration du jeu de données d'apprentissage"
+    object_detection_page = "Détection d'objets en temps réel."
+    
+    application = st.sidebar.selectbox(label="Application", options=[dataset_explorer_page, object_detection_page])
+    
+    if application == dataset_explorer_page:
+        st.header(dataset_explorer_page)
+        dataset = load_dataset(ROOT_DIR, ANN_FILE)
+        app_dataset_explorer(dataset)
+    elif application == object_detection_page:
+        #app_mode = object_detection_page
+        st.header(object_detection_page)
+        app_object_detection()
+    
+    logger.debug("=== Alive threads ===")
+    for thread in threading.enumerate():
+        if thread.is_alive():
+            logger.debug(f"  {thread.name} ({thread.ident})")
+
+            
+
+
+
+@st.cache(allow_output_mutation=True)
+def load_dataset(root_dir, annFile):
+    return CocoDetection(root=root_dir, annFile=annFile)
+
+def app_dataset_explorer(dataset):
+    
+    COCO_CATEGORY_DICT = {v:k for k,v in enumerate(COCO_CATEGORY_NAMES)}
+    
+    
+    class DatasetExplorer():
+        def __init__(self, dataset) -> None:
+            self.dataset = dataset
+           
+        def _annotate_image(self, image, annotations):
+            for annotation in annotations:
+                [x,y,w,h] = annotation['bbox']
+                draw = ImageDraw.Draw(image)
+                category = annotation['category_id']
+                color = tuple(COLORS[category])
+                draw.rectangle([x,y,w+x, h+y], outline=color)
+                label_str =  COCO_CATEGORY_NAMES[category]
+                draw.text((x, y), label_str, fill=color)
+            return image
+        
+        def _get_category_images_ids(self, category):
+            image_ids = self.dataset.coco.getImgIds(catIds=category)
+            return list(image_ids)
+        
+
+        
+        def _chose_random_image(self, image_ids):
+            return random.choice(image_ids)
+        
+        def get_random_image(self, category='all'):
+            if category == 'all':
+                category = ''
+            else:
+                category = COCO_CATEGORY_DICT[category]
+            image_ids = self._get_category_images_ids(category)
+            idx = self._chose_random_image(image_ids)
+            image, annotations = self.dataset.__getitem__(self.dataset.ids.index(idx))
+            return self._annotate_image(image, annotations)
+    
+    dataset_explorer = DatasetExplorer(dataset)
+    
+
+    
+    
+    
+    
+    with st.sidebar.form("myform"):
+        category_name = st.selectbox(
+        label="Catégorie d'exemple :",
+        options=['all']+COCO_CATEGORY_NAMES
+    )
+        nb_images = st.slider(label="Nombre d'images", min_value=1, max_value=10)
+        button = st.form_submit_button("Afficher")
+        if button:
+            pass
+    st.subheader(f"Images de la catégorie : {category_name}")
+    images = [dataset_explorer.get_random_image(category=category_name) for i in range(nb_images)]
+    st.image([np.array(image) for image in images])
+        
+    
+
+
+def app_object_detection():
+    """Object detection demo with MobileNet SSD.
+    This model and code are based on
+    https://github.com/robmarkcole/object-detection-app
+    """
+
+
+
+
+    DEFAULT_CONFIDENCE_THRESHOLD = 0.7
 
     class Detection(NamedTuple):
         name: str
@@ -125,7 +208,7 @@ def app_object_detection():
                 category_name =  COCO_CATEGORY_NAMES[category] if COCO_CATEGORY_NAMES else str(category)
                 label_str = f"{category_name} {score:1.2f}"
                 draw.text((box[0], box[1]), label_str, fill=tuple(COLORS[category]), font=font) ## TODO: Passer la valeur de confiance de la prédiction.
-                result.append(Detection(name=label_str, prob=round(float(score), 2))) ## TODO: prob doit prendre la valeur de confiance de la prédiction.
+                result.append(Detection(name=category_name, prob=round(float(score), 2))) ## TODO: prob doit prendre la valeur de confiance de la prédiction.
             return im, result
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
@@ -156,7 +239,7 @@ def app_object_detection():
     if webrtc_ctx.video_processor:
         webrtc_ctx.video_processor.confidence_threshold = confidence_threshold
 
-    if st.checkbox("Show the detected labels", value=True):
+    if st.sidebar.checkbox("Montrer les objets détectés", value=True):
         if webrtc_ctx.state.playing:
             labels_placeholder = st.empty()
             # NOTE: The video transformation with object detection and
@@ -176,7 +259,7 @@ def app_object_detection():
                 else:
                     break
 
-    st.markdown(
+    st.sidebar.markdown(
         "This demo uses a model and code from "
         "https://github.com/robmarkcole/object-detection-app. "
         "Many thanks to the project."
