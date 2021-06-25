@@ -1,13 +1,14 @@
-import asyncio
+#import asyncio
 import logging
 import logging.handlers
 import queue
 import threading
-import urllib.request
+#import urllib.request
 from pathlib import Path
 from typing import List, NamedTuple
 import random
 
+import PIL
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import torch
@@ -21,11 +22,11 @@ except ImportError:
 
 import av
 #import cv2
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import numpy as np
-import pydub
+#import pydub
 import streamlit as st
-from aiortc.contrib.media import MediaPlayer
+#from aiortc.contrib.media import MediaPlayer
 
 from streamlit_webrtc import (
     AudioProcessorBase,
@@ -146,7 +147,7 @@ def app_dataset_explorer(dataset):
     with st.sidebar.form("myform"):
         category_name = st.selectbox(
         label="Catégorie d'exemple :",
-        options=['all']+COCO_CATEGORY_NAMES
+        options=['all']+[category_name for category_name in COCO_CATEGORY_NAMES if not '/' in category_name and not "__" in category_name]
     )
         nb_images = st.slider(label="Nombre d'images", min_value=1, max_value=10)
         button = st.form_submit_button("Afficher")
@@ -213,6 +214,7 @@ def app_object_detection():
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
             image = frame.to_image()
+            image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
             img_tensor = torch.as_tensor(np.array(image) / 255) # Normalize input to [0, 1]
             img_tensor = img_tensor.to(self.device)
             img_tensor = img_tensor.permute(2, 0, 1).float() # Reorder image axes to channel first
