@@ -28,6 +28,8 @@ import numpy as np
 import streamlit as st
 #from aiortc.contrib.media import MediaPlayer
 
+import seaborn
+
 from streamlit_webrtc import (
     AudioProcessorBase,
     ClientSettings,
@@ -43,8 +45,9 @@ logger = logging.getLogger(__name__)
 
 # This code is based on https://github.com/streamlit/demo-self-driving/blob/230245391f2dda0cb464008195a470751c01770b/streamlit_app.py#L48  # noqa: E501
 
+# rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
 WEBRTC_CLIENT_SETTINGS = ClientSettings(
-    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+    rtc_configuration={"iceServers": [{"urls": ["stun:totopatate"]}]},
     media_stream_constraints={"video": True, "audio": False},
 )
 
@@ -66,8 +69,8 @@ COCO_CATEGORY_NAMES = [
 ROOT_DIR = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/images"
 ANN_FILE = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/annotations/instances_train2014.json"
 
-COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
-
+# COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
+COLORS = np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(COCO_CATEGORY_NAMES))])
 
 def main():
     
@@ -169,7 +172,7 @@ def app_object_detection():
 
 
 
-    DEFAULT_CONFIDENCE_THRESHOLD = 0.7
+    DEFAULT_CONFIDENCE_THRESHOLD = 0.8
 
     class Detection(NamedTuple):
         name: str
@@ -189,6 +192,8 @@ def app_object_detection():
             self._net.eval()
             self.confidence_threshold = DEFAULT_CONFIDENCE_THRESHOLD
             self.result_queue = queue.Queue()
+
+            self.old_counter = None 
 
         def _annotate_image(self, image, target=None, category_names=None):
             # Convert tensor to image and draw it.
@@ -219,8 +224,12 @@ def app_object_detection():
             img_tensor = img_tensor.to(self.device)
             img_tensor = img_tensor.permute(2, 0, 1).float() # Reorder image axes to channel first
             img_tensor = img_tensor[0:3]
-            detections = self._net([img_tensor])
-            annotated_image, result = self._annotate_image(img_tensor, detections[0], category_names=COCO_CATEGORY_NAMES)
+            if self.old_counter == None or self.old_counter >= 8:
+                self.old_counter = 0
+                self.old_detection = self._net([img_tensor])
+            self.old_counter += 1
+            # detections = self._net([img_tensor])
+            annotated_image, result = self._annotate_image(img_tensor, self.old_detection[0], category_names=COCO_CATEGORY_NAMES)
 
             # NOTE: This `recv` method is called in another thread,
             # so it must be thread-safe.
