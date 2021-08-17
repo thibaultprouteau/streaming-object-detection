@@ -109,6 +109,7 @@ def app_dataset_explorer(dataset):
     class DatasetExplorer():
         def __init__(self, dataset) -> None:
             self.dataset = dataset
+            self.font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=16)
            
         def _annotate_image(self, image, annotations):
             for annotation in annotations:
@@ -118,7 +119,7 @@ def app_dataset_explorer(dataset):
                 color = tuple(COLORS[category])
                 draw.rectangle([x,y,w+x, h+y], outline=color)
                 label_str =  COCO_CATEGORY_NAMES[category]
-                draw.text((x, y), label_str, fill=color)
+                draw.text((x, y), label_str, fill=color, font=self.font)
             return image
         
         def _get_category_images_ids(self, category):
@@ -159,9 +160,6 @@ def app_dataset_explorer(dataset):
     st.subheader(f"Images de la catégorie : {category_name}")
     images = [dataset_explorer.get_random_image(category=category_name) for i in range(nb_images)]
     st.image([np.array(image) for image in images])
-        
-    
-
 
 def app_object_detection():
     """Object detection demo with MobileNet SSD.
@@ -193,7 +191,8 @@ def app_object_detection():
             self.confidence_threshold = DEFAULT_CONFIDENCE_THRESHOLD
             self.result_queue = queue.Queue()
 
-            self.old_counter = None 
+            self.old_counter = None
+            self.font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=16)
 
         def _annotate_image(self, image, target=None, category_names=None):
             # Convert tensor to image and draw it.
@@ -202,24 +201,26 @@ def app_object_detection():
             im = Image.fromarray(np_img)
             draw = ImageDraw.Draw(im)
 
-            if target:
-                # Make sure the required font is available
-                font = ImageFont.truetype(font='Roboto-Regular.ttf', size=16)
-
-                # Draw each bounding box in the target
+            # Draw each bounding box in the target
             for box, label, score in zip(target['boxes'], target['labels'], target['scores']):
                 box = box.detach().cpu().numpy()
                 category = label.cpu().numpy()
-                draw.rectangle(box, outline=tuple(COLORS[category]))
                 category_name =  COCO_CATEGORY_NAMES[category] if COCO_CATEGORY_NAMES else str(category)
                 label_str = f"{category_name} {score:1.2f}"
-                draw.text((box[0], box[1]), label_str, fill=tuple(COLORS[category]), font=font) ## TODO: Passer la valeur de confiance de la prédiction.
-                result.append(Detection(name=category_name, prob=round(float(score), 2))) ## TODO: prob doit prendre la valeur de confiance de la prédiction.
+                # print(self.font.getbbox(label_str, anchor=(box[0], box[1])))
+                # draw.rectangle(self.font.getbbox(label_str, anchor=(box[0], box[1])))
+                text_size = self.font.getsize(label_str)
+                box_color = tuple(COLORS[category])
+                text_color = (0, 0, 0) # complement(*box_color)
+                draw.rectangle(box, outline=box_color)
+                draw.rectangle((box[0], box[1], box[0] + text_size[0], box[1] + text_size[1]), fill=box_color)
+                draw.text((box[0], box[1]), label_str, fill=text_color, font=self.font)
+                result.append(Detection(name=category_name, prob=round(float(score), 2)))
             return im, result
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
             image = frame.to_image()
-            image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+            # image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
             img_tensor = torch.as_tensor(np.array(image) / 255) # Normalize input to [0, 1]
             img_tensor = img_tensor.to(self.device)
             img_tensor = img_tensor.permute(2, 0, 1).float() # Reorder image axes to channel first
