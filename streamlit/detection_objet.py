@@ -72,13 +72,15 @@ ANN_FILE = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/annotations/ins
 # COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
 COLORS = np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(COCO_CATEGORY_NAMES))])
 
+FONT_SIZE = 16
+
 def main():
-    
+
     dataset_explorer_page = "Exploration du jeu de données d'apprentissage"
     object_detection_page = "Détection d'objets en temps réel."
-    
+
     application = st.sidebar.selectbox(label="Application", options=[dataset_explorer_page, object_detection_page])
-    
+
     if application == dataset_explorer_page:
         st.header(dataset_explorer_page)
         dataset = load_dataset(ROOT_DIR, ANN_FILE)
@@ -87,14 +89,11 @@ def main():
         #app_mode = object_detection_page
         st.header(object_detection_page)
         app_object_detection()
-    
+
     logger.debug("=== Alive threads ===")
     for thread in threading.enumerate():
         if thread.is_alive():
             logger.debug(f"  {thread.name} ({thread.ident})")
-
-            
-
 
 
 @st.cache(allow_output_mutation=True)
@@ -102,35 +101,37 @@ def load_dataset(root_dir, annFile):
     return CocoDetection(root=root_dir, annFile=annFile)
 
 def app_dataset_explorer(dataset):
-    
+
     COCO_CATEGORY_DICT = {v:k for k,v in enumerate(COCO_CATEGORY_NAMES)}
-    
-    
+
+
     class DatasetExplorer():
         def __init__(self, dataset) -> None:
             self.dataset = dataset
-            self.font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=16)
-           
+            self.font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=FONT_SIZE)
+
         def _annotate_image(self, image, annotations):
             for annotation in annotations:
                 [x,y,w,h] = annotation['bbox']
                 draw = ImageDraw.Draw(image)
                 category = annotation['category_id']
                 color = tuple(COLORS[category])
-                draw.rectangle([x,y,w+x, h+y], outline=color)
                 label_str =  COCO_CATEGORY_NAMES[category]
-                draw.text((x, y), label_str, fill=color, font=self.font)
+                text_size = self.font.getsize(label_str)
+                box_color = tuple(COLORS[category])
+                text_color = (0, 0, 0)
+                draw.rectangle([x,y,w+x, h+y], outline=box_color)
+                draw.rectangle((x, y, x + text_size[0], y + text_size[1]), fill=box_color)
+                draw.text((x, y), label_str, fill=text_color, font=self.font)
             return image
-        
+
         def _get_category_images_ids(self, category):
             image_ids = self.dataset.coco.getImgIds(catIds=category)
             return list(image_ids)
-        
 
-        
         def _chose_random_image(self, image_ids):
             return random.choice(image_ids)
-        
+
         def get_random_image(self, category='all'):
             if category == 'all':
                 category = ''
@@ -140,20 +141,15 @@ def app_dataset_explorer(dataset):
             idx = self._chose_random_image(image_ids)
             image, annotations = self.dataset.__getitem__(self.dataset.ids.index(idx))
             return self._annotate_image(image, annotations)
-    
-    dataset_explorer = DatasetExplorer(dataset)
-    
 
-    
-    
-    
-    
+    dataset_explorer = DatasetExplorer(dataset)
+
     with st.sidebar.form("myform"):
         category_name = st.selectbox(
-        label="Catégorie d'exemple :",
-        options=['all']+[category_name for category_name in COCO_CATEGORY_NAMES if not '/' in category_name and not "__" in category_name]
-    )
-        nb_images = st.slider(label="Nombre d'images", min_value=1, max_value=10)
+            label="Catégorie d'exemple :",
+            options=['all']+sorted([category_name for category_name in COCO_CATEGORY_NAMES if not '/' in category_name and not "__" in category_name])
+        )
+        nb_images = st.slider(label="Nombre d'images", min_value=1, max_value=10, value=5)
         button = st.form_submit_button("Afficher")
         if button:
             pass
@@ -161,14 +157,25 @@ def app_dataset_explorer(dataset):
     images = [dataset_explorer.get_random_image(category=category_name) for i in range(nb_images)]
     st.image([np.array(image) for image in images])
 
+@st.cache(allow_output_mutation=True)
+def load_model(device, confidence_threshold):
+    _net = torchvision.models.detection.fasterrcnn_resnet50_fpn(
+        pretrained=True,
+        box_score_thresh=0.1 #0.001
+    )
+    _net.to(device)
+    _net.eval()
+    # print(_net.__dir__)
+    # print(dir(_net))
+    # _net.box_score_thresh = 0.1
+    return _net
+
+
 def app_object_detection():
     """Object detection demo with MobileNet SSD.
     This model and code are based on
     https://github.com/robmarkcole/object-detection-app
     """
-
-
-
 
     DEFAULT_CONFIDENCE_THRESHOLD = 0.8
 
@@ -179,20 +186,17 @@ def app_object_detection():
     class MobileNetSSDVideoProcessor(VideoProcessorBase):
         confidence_threshold: float
         result_queue: "queue.Queue[List[Detection]]"
+        invert_image: bool
 
         def __init__(self) -> None:
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            self._net = torchvision.models.detection.fasterrcnn_resnet50_fpn(
-    pretrained=True,
-    box_score_thresh=DEFAULT_CONFIDENCE_THRESHOLD
-)
-            self._net.to(self.device)
-            self._net.eval()
             self.confidence_threshold = DEFAULT_CONFIDENCE_THRESHOLD
+            self._net = load_model(self.device, self.confidence_threshold)
             self.result_queue = queue.Queue()
+            self.invert_image = False
 
             self.old_counter = None
-            self.font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=16)
+            self.font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=FONT_SIZE)
 
         def _annotate_image(self, image, target=None, category_names=None):
             # Convert tensor to image and draw it.
@@ -203,15 +207,15 @@ def app_object_detection():
 
             # Draw each bounding box in the target
             for box, label, score in zip(target['boxes'], target['labels'], target['scores']):
+                if score < self.confidence_threshold:
+                    continue
                 box = box.detach().cpu().numpy()
                 category = label.cpu().numpy()
                 category_name =  COCO_CATEGORY_NAMES[category] if COCO_CATEGORY_NAMES else str(category)
                 label_str = f"{category_name} {score:1.2f}"
-                # print(self.font.getbbox(label_str, anchor=(box[0], box[1])))
-                # draw.rectangle(self.font.getbbox(label_str, anchor=(box[0], box[1])))
                 text_size = self.font.getsize(label_str)
                 box_color = tuple(COLORS[category])
-                text_color = (0, 0, 0) # complement(*box_color)
+                text_color = (0, 0, 0)
                 draw.rectangle(box, outline=box_color)
                 draw.rectangle((box[0], box[1], box[0] + text_size[0], box[1] + text_size[1]), fill=box_color)
                 draw.text((box[0], box[1]), label_str, fill=text_color, font=self.font)
@@ -220,7 +224,8 @@ def app_object_detection():
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
             image = frame.to_image()
-            # image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+            if self.invert_image:
+                image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
             img_tensor = torch.as_tensor(np.array(image) / 255) # Normalize input to [0, 1]
             img_tensor = img_tensor.to(self.device)
             img_tensor = img_tensor.permute(2, 0, 1).float() # Reorder image axes to channel first
@@ -249,7 +254,8 @@ def app_object_detection():
     confidence_threshold = DEFAULT_CONFIDENCE_THRESHOLD
 
     if webrtc_ctx.video_processor:
-        webrtc_ctx.video_processor.confidence_threshold = confidence_threshold
+        webrtc_ctx.video_processor.confidence_threshold = st.slider(label="Seuil de confiance minimal", step=0.05, min_value=0.1, max_value=1.0, value=DEFAULT_CONFIDENCE_THRESHOLD)
+        webrtc_ctx.video_processor.invert_image = st.sidebar.checkbox("Inverser l'image", value=True)
 
     if st.sidebar.checkbox("Montrer les objets détectés", value=True):
         if webrtc_ctx.state.playing:
