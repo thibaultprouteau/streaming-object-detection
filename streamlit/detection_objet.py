@@ -52,18 +52,18 @@ WEBRTC_CLIENT_SETTINGS = ClientSettings(
 )
 
 COCO_CATEGORY_NAMES = [
-    '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-    'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
-    'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-    'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
-    'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
-    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-    'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-    'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
-    'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
-    'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
-    'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
-    'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+    '__background__', 'humain', 'bicyclette', 'voiture', 'moto', 'avion', 'bus',
+    'train', 'camion', 'bateau', 'feu tricolore', 'bouche à incendie', 'N/A', 'panneau stop',
+    'parcmètre', 'banc', 'oiseau', 'chat', 'chien', 'cheval', 'mouton', 'vache',
+    'éléphant', 'ours', 'zèbre', 'girafe', 'N/A', 'sac à dos', 'parapluie', 'N/A', 'N/A',
+    'sac à main', 'cravate', 'valise', 'frisbee', 'skis', 'snowboard', 'ballon',
+    'cerf-volant', 'batte de baseball', 'gant de baseball', 'skateboard', 'planche de surf', 'raquette de tennis',
+    'bouteille', 'N/A', 'verre à vin', 'verre', 'fourchette', 'couteau', 'cuillère', 'bol',
+    'banane', 'pomme', 'sandwich', 'orange', 'broccoli', 'carotte', 'hot dog', 'pizza',
+    'doughnut', 'gateau', 'chaise', 'canapé', 'plante', 'lit', 'N/A', 'table à manger',
+    'N/A', 'N/A', 'toilettes', 'N/A', 'tv', 'ordinateur portable', 'souris', 'télécommande', 'clavier', 'téléphone portable',
+    'four à micro-ondes', 'four', 'grille-pain', 'évier', 'réfrigirateur', 'N/A', 'livre',
+    'pendule', 'vase', 'ciseaux', 'ours en peluche', 'sèche cheveux', 'brosse à dents'
 ]
 
 ROOT_DIR = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/images"
@@ -156,6 +156,7 @@ def app_dataset_explorer(dataset):
     st.subheader(f"Images de la catégorie : {category_name}")
     images = [dataset_explorer.get_random_image(category=category_name) for i in range(nb_images)]
     st.image([np.array(image) for image in images])
+    st.markdown("__Dataset COCO (Common Objects in Context)__ [https://cocodataset.org/](https://cocodataset.org/) sous licence Creative Commons Attribution 4.0. ")
 
 @st.cache(allow_output_mutation=True)
 def load_model(device, confidence_threshold):
@@ -277,10 +278,12 @@ def app_object_detection():
                 else:
                     break
 
-    st.sidebar.markdown(
-        "This demo uses a model and code from "
-        "https://github.com/robmarkcole/object-detection-app. "
-        "Many thanks to the project."
+    st.markdown(
+        "Cette démonstration utilise du code issu de "
+        "https://github.com/robmarkcole/object-detection-app "
+        "et un modèle "
+        " https://pytorch.org/vision/stable/models.html."
+
     )
 
 if __name__ == "__main__":
