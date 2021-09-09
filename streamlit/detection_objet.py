@@ -66,11 +66,15 @@ COCO_CATEGORY_NAMES = [
     'pendule', 'vase', 'ciseaux', 'ours en peluche', 'sèche cheveux', 'brosse à dents'
 ]
 
+PASCAL_VOC_CLASSES = ['background','aeroplane','bicycle','bird','boat','bottle','bus','car','cat','chair','cow','diningtable','dog','horse',
+'motorbike','person','pottedplant','sheep','sofa','train','tvmonitor']
+
 ROOT_DIR = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/images"
 ANN_FILE = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/annotations/instances_train2014.json"
 
 # COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
-COLORS = np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(COCO_CATEGORY_NAMES))])
+COLORS_COCO = np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(COCO_CATEGORY_NAMES))])
+COLORS_PASCAL_VOC =  np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(PASCAL_VOC_CLASSES))]).astype("uint8")
 
 FONT_SIZE = 16
 
@@ -78,8 +82,9 @@ def main():
 
     dataset_explorer_page = "Exploration du jeu de données d'apprentissage"
     object_detection_page = "Détection d'objets en temps réel."
+    image_segmentation_page = "Segmentation d'images en temps réel."
 
-    application = st.sidebar.selectbox(label="Application", options=[dataset_explorer_page, object_detection_page])
+    application = st.sidebar.selectbox(label="Application", options=[dataset_explorer_page, object_detection_page, image_segmentation_page])
 
     if application == dataset_explorer_page:
         st.header(dataset_explorer_page)
@@ -89,6 +94,9 @@ def main():
         #app_mode = object_detection_page
         st.header(object_detection_page)
         app_object_detection()
+    elif application == image_segmentation_page:
+        st.header(image_segmentation_page)
+        app_image_segmentation()
 
     logger.debug("=== Alive threads ===")
     for thread in threading.enumerate():
@@ -115,10 +123,10 @@ def app_dataset_explorer(dataset):
                 [x,y,w,h] = annotation['bbox']
                 draw = ImageDraw.Draw(image)
                 category = annotation['category_id']
-                color = tuple(COLORS[category])
+                color = tuple(COLORS_COCO[category])
                 label_str =  COCO_CATEGORY_NAMES[category]
                 text_size = self.font.getsize(label_str)
-                box_color = tuple(COLORS[category])
+                box_color = tuple(COLORS_COCO[category])
                 text_color = (0, 0, 0)
                 draw.rectangle([x,y,w+x, h+y], outline=box_color)
                 draw.rectangle((x, y, x + text_size[0], y + text_size[1]), fill=box_color)
@@ -159,11 +167,16 @@ def app_dataset_explorer(dataset):
     st.markdown("__Dataset COCO (Common Objects in Context)__ [https://cocodataset.org/](https://cocodataset.org/) sous licence Creative Commons Attribution 4.0. ")
 
 @st.cache(allow_output_mutation=True)
-def load_model(device, confidence_threshold):
-    _net = torchvision.models.detection.fasterrcnn_resnet50_fpn(
-        pretrained=True,
-        box_score_thresh=0.1 #0.001
-    )
+def load_model(device, confidence_threshold, task):
+    if task=="detection":
+        _net = torchvision.models.detection.fasterrcnn_resnet50_fpn(
+            pretrained=True,
+            box_score_thresh=0.1 #0.001
+        )
+    elif task=="segmentation":
+         _net = torch.hub.load('pytorch/vision:v0.10.0', 'deeplabv3_resnet101', pretrained=True)
+    else:
+        raise ValueError("Unknown task")
     _net.to(device)
     _net.eval()
     # print(_net.__dir__)
@@ -192,7 +205,7 @@ def app_object_detection():
         def __init__(self) -> None:
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             self.confidence_threshold = DEFAULT_CONFIDENCE_THRESHOLD
-            self._net = load_model(self.device, self.confidence_threshold)
+            self._net = load_model(self.device, self.confidence_threshold, "detection")
             self.result_queue = queue.Queue()
             self.invert_image = False
 
@@ -215,7 +228,7 @@ def app_object_detection():
                 category_name =  COCO_CATEGORY_NAMES[category] if COCO_CATEGORY_NAMES else str(category)
                 label_str = f"{category_name} {score:1.2f}"
                 text_size = self.font.getsize(label_str)
-                box_color = tuple(COLORS[category])
+                box_color = tuple(COLORS_COCO[category])
                 text_color = (0, 0, 0)
                 draw.rectangle(box, outline=box_color)
                 draw.rectangle((box[0], box[1], box[0] + text_size[0], box[1] + text_size[1]), fill=box_color)
@@ -256,6 +269,115 @@ def app_object_detection():
 
     if webrtc_ctx.video_processor:
         webrtc_ctx.video_processor.confidence_threshold = st.slider(label="Seuil de confiance minimal", step=0.05, min_value=0.1, max_value=1.0, value=DEFAULT_CONFIDENCE_THRESHOLD)
+        webrtc_ctx.video_processor.invert_image = st.sidebar.checkbox("Inverser l'image", value=True)
+
+    if st.sidebar.checkbox("Montrer les objets détectés", value=True):
+        if webrtc_ctx.state.playing:
+            labels_placeholder = st.empty()
+            # NOTE: The video transformation with object detection and
+            # this loop displaying the result labels are running
+            # in different threads asynchronously.
+            # Then the rendered video frames and the labels displayed here
+            # are not strictly synchronized.
+            while True:
+                if webrtc_ctx.video_processor:
+                    try:
+                        result = webrtc_ctx.video_processor.result_queue.get(
+                            timeout=1.0
+                        )
+                    except queue.Empty:
+                        result = None
+                    labels_placeholder.table(result)
+                else:
+                    break
+
+    st.markdown(
+        "Cette démonstration utilise du code issu de "
+        "https://github.com/robmarkcole/object-detection-app "
+        "et un modèle "
+        " https://pytorch.org/vision/stable/models.html."
+
+    )
+
+def app_image_segmentation():
+    """Object detection demo with MobileNet SSD.
+    This model and code are based on
+    https://github.com/robmarkcole/object-detection-app
+    """
+
+
+    class Detection(NamedTuple):
+            name: str
+            prob: float
+
+    class MobileNetSSDVideoProcessor(VideoProcessorBase):
+        confidence_threshold: float
+        result_queue: "queue.Queue[List[Detection]]"
+        invert_image: bool
+
+        
+
+        def __init__(self) -> None:
+            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            print("LOADING MODEL")
+            self._net = load_model(self.device, 0, "segmentation")
+            self.result_queue = queue.Queue()
+            self.invert_image = False
+            self._net = load_model(self.device, 0, "segmentation")
+            self.old_counter = None
+            self.font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=FONT_SIZE)
+
+        def _annotate_image(self, image, target=None, category_names=None):
+            # Convert tensor to image and draw it.
+            result: List[Detection] = []
+
+            # palette = torch.tensor([2 ** 25 - 1, 2 ** 15 - 1, 2 ** 21 - 1])
+            # colors = torch.as_tensor([i for i in range(21)])[:, None] * palette
+            # colors = (colors % 255).numpy().astype("uint8")
+            im = Image.fromarray(target.byte().cpu().numpy()).resize(image.size)
+            im.putpalette(COLORS_PASCAL_VOC)
+            im = im.convert('RGBA')
+            image = image.convert('RGBA')
+            annotated_image = Image.blend(image, im, 0.7)
+            result.append(Detection(name="toto", prob=0.2))
+            
+            return annotated_image, result
+
+        def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+            image = frame.to_image()
+            if self.invert_image:
+                image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+            preprocess = torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+
+            input_tensor = preprocess(image)
+            input_batch = input_tensor.unsqueeze(0)
+            input_batch = input_batch.to(self.device)
+            if self.old_counter == None or self.old_counter >= 8:
+                self.old_counter = 0
+                self.old_detection = self._net(input_batch)
+            self.old_counter += 1
+            # detections = self._net([img_tensor])
+            annotated_image, result = self._annotate_image(image, self.old_detection['out'][0].argmax(0), category_names=PASCAL_VOC_CLASSES)
+            print(self.old_detection['out'][0][1].shape)
+            # NOTE: This `recv` method is called in another thread,
+            # so it must be thread-safe.
+            self.result_queue.put(result)
+
+            return av.VideoFrame.from_image(annotated_image)
+
+    webrtc_ctx = webrtc_streamer(
+        key="image-segmentation",
+        mode=WebRtcMode.SENDRECV,
+        client_settings=WEBRTC_CLIENT_SETTINGS,
+        video_processor_factory=MobileNetSSDVideoProcessor,
+        async_processing=True,
+    )
+
+
+    if webrtc_ctx.video_processor:
         webrtc_ctx.video_processor.invert_image = st.sidebar.checkbox("Inverser l'image", value=True)
 
     if st.sidebar.checkbox("Montrer les objets détectés", value=True):
