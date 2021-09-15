@@ -66,11 +66,12 @@ COCO_CATEGORY_NAMES = [
     'pendule', 'vase', 'ciseaux', 'ours en peluche', 'sèche cheveux', 'brosse à dents'
 ]
 
-PASCAL_VOC_CLASSES = ['background','aeroplane','bicycle','bird','boat','bottle','bus','car','cat','chair','cow','diningtable','dog','horse',
-'motorbike','person','pottedplant','sheep','sofa','train','tvmonitor']
+PASCAL_VOC_CLASSES = ['arrière-plan','avion','byciclette','oiseau','bateau','bouteille','bus','voiture','chat','chaise','vache','table à manger','chien','cheval',
+'moto','humain','plante','mouton','canapé','train','tv']
 
 ROOT_DIR = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/images"
 ANN_FILE = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/annotations/instances_train2014.json"
+
 
 # COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
 COLORS_COCO = np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(COCO_CATEGORY_NAMES))])
@@ -307,8 +308,8 @@ def app_image_segmentation():
 
 
     class Detection(NamedTuple):
-            name: str
-            prob: float
+            legend: np.ndarray
+
 
     class MobileNetSSDVideoProcessor(VideoProcessorBase):
         confidence_threshold: float
@@ -323,7 +324,6 @@ def app_image_segmentation():
             self._net = load_model(self.device, 0, "segmentation")
             self.result_queue = queue.Queue()
             self.invert_image = False
-            self._net = load_model(self.device, 0, "segmentation")
             self.old_counter = None
             self.font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=FONT_SIZE)
 
@@ -339,7 +339,14 @@ def app_image_segmentation():
             im = im.convert('RGBA')
             image = image.convert('RGBA')
             annotated_image = Image.blend(image, im, 0.7)
-            result.append(Detection(name="toto", prob=0.2))
+            for category in torch.unique(torch.flatten(target)): #On récupère les catégories
+                color_image = Image.new('RGB', (200, 30), color = tuple(COLORS_PASCAL_VOC[category]))
+                draw = ImageDraw.Draw(color_image)
+                font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=24)
+                draw.text((0,0), PASCAL_VOC_CLASSES[category], (0,0,0), font=font)
+
+
+                result.append(Detection(legend=color_image ))
             
             return annotated_image, result
 
@@ -361,7 +368,6 @@ def app_image_segmentation():
             self.old_counter += 1
             # detections = self._net([img_tensor])
             annotated_image, result = self._annotate_image(image, self.old_detection['out'][0].argmax(0), category_names=PASCAL_VOC_CLASSES)
-            print(self.old_detection['out'][0][1].shape)
             # NOTE: This `recv` method is called in another thread,
             # so it must be thread-safe.
             self.result_queue.put(result)
@@ -383,6 +389,7 @@ def app_image_segmentation():
     if st.sidebar.checkbox("Montrer les objets détectés", value=True):
         if webrtc_ctx.state.playing:
             labels_placeholder = st.empty()
+            
             # NOTE: The video transformation with object detection and
             # this loop displaying the result labels are running
             # in different threads asynchronously.
@@ -396,7 +403,8 @@ def app_image_segmentation():
                         )
                     except queue.Empty:
                         result = None
-                    labels_placeholder.table(result)
+                    if result:
+                        labels_placeholder.image([r.legend for r in result])
                 else:
                     break
 
