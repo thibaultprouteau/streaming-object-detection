@@ -66,18 +66,142 @@ COCO_CATEGORY_NAMES = [
     'pendule', 'vase', 'ciseaux', 'ours en peluche', 'sèche cheveux', 'brosse à dents'
 ]
 
-PASCAL_VOC_CLASSES = ['arrière-plan','avion','byciclette','oiseau','bateau','bouteille','bus','voiture','chat','chaise','vache','table à manger','chien','cheval',
-'moto','humain','plante','mouton','canapé','train','tv']
+PASCAL_VOC_CLASSES = [
+    'arrière-plan','avion','byciclette','oiseau','bateau', 'bouteille','bus',
+    'voiture','chat','chaise','vache','table à manger','chien','cheval','moto',
+    'humain','plante','mouton','canapé','train','tv'
+]
 
-# ROOT_DIR = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/images"
+# LST-DEMO
 ROOT_DIR = "/home/antract/streamlit/fete_science/coco/images"
-# ANN_FILE = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/annotations/instances_train2014.json"
 ANN_FILE = "/home/antract/streamlit/fete_science/coco/annotations/instances_train2014.json"
+
+# LST
+# ROOT_DIR = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/images"
+# ANN_FILE = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/annotations/instances_train2014.json"
 
 
 # COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
-COLORS_COCO = np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(COCO_CATEGORY_NAMES))])
-COLORS_PASCAL_VOC =  np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(PASCAL_VOC_CLASSES))]).astype("uint8")
+# COLORS_COCO = np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(COCO_CATEGORY_NAMES))])
+# COLORS_PASCAL_VOC =  np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(PASCAL_VOC_CLASSES))]).astype("uint8")
+
+COLORS_COCO = np.array([
+ (176, 76, 191),
+ (187, 191, 76),
+ (76, 105, 191),
+ (179, 306, 122),
+ (76, 191, 191),
+ (122, 306, 306),
+ (122, 306, 151),
+ (101, 191, 76),
+ (191, 130, 76),
+ (191, 76, 76),
+ (122, 271, 306),
+ (90, 76, 191),
+ (179, 122, 306),
+ (128, 306, 122),
+ (191, 108, 76),
+ (283, 122, 306),
+ (248, 122, 306),
+ (191, 76, 98),
+ (306, 242, 122),
+ (122, 306, 219),
+ (122, 306, 202),
+ (191, 151, 76),
+ (76, 191, 115),
+ (306, 122, 294),
+ (191, 184, 76),
+ (80, 191, 76),
+ (76, 83, 191),
+ (122, 168, 306),
+ (76, 191, 105),
+ (76, 191, 94),
+ (122, 306, 271),
+ (112, 76, 191),
+ (283, 306, 122),
+ (133, 76, 191),
+ (76, 191, 169),
+ (90, 191, 76),
+ (306, 122, 225),
+ (76, 191, 126),
+ (306, 156, 122),
+ (144, 191, 76),
+ (122, 133, 306),
+ (122, 306, 133),
+ (191, 173, 76),
+ (176, 191, 76),
+ (265, 306, 122),
+ (306, 174, 122),
+ (191, 76, 119),
+ (122, 202, 306),
+ (76, 148, 191),
+ (306, 139, 122),
+ (191, 87, 76),
+ (306, 122, 191),
+ (191, 76, 162),
+ (76, 169, 191),
+ (145, 122, 306),
+ (306, 122, 156),
+ (76, 191, 148),
+ (306, 225, 122),
+ (133, 191, 76),
+ (306, 208, 122),
+ (191, 76, 184),
+ (306, 191, 122),
+ (166, 191, 76),
+ (122, 237, 306),
+ (76, 191, 83),
+ (162, 306, 122),
+ (196, 306, 122),
+ (191, 141, 76),
+ (248, 306, 122),
+ (306, 122, 122),
+ (122, 306, 237),
+ (123, 191, 76),
+ (191, 162, 76),
+ (76, 126, 191),
+ (306, 294, 122),
+ (112, 191, 76),
+ (306, 260, 122),
+ (306, 277, 122),
+ (155, 191, 76),
+ (122, 306, 185),
+ (306, 122, 260),
+ (122, 306, 168),
+ (191, 98, 76),
+ (214, 122, 306),
+ (214, 306, 122),
+ (191, 76, 141),
+ (155, 76, 191),
+ (145, 306, 122),
+ (300, 306, 122),
+ (231, 306, 122),
+ (191, 119, 76)
+]).astype("uint8")
+
+COLORS_PASCAL_VOC = np.array([
+ (155, 155, 155),
+ (214, 306, 122),
+ (283, 306, 122),
+ (122, 306, 306),
+ (306, 260, 122),
+ (76, 191, 191),
+ (191, 76, 162),
+ (122, 168, 306),
+ (133, 76, 191),
+ (76, 105, 191),
+ (122, 306, 168),
+ (214, 122, 306),
+ (306, 191, 122),
+ (191, 76, 76),
+ (306, 122, 260),
+ (306, 122, 122),
+ (191, 162, 76),
+ (133, 191, 76),
+ (76, 191, 105),
+ (176, 191, 76),
+ (191, 119, 76)
+]).astype("uint8")
 
 FONT_SIZE = 16
 
