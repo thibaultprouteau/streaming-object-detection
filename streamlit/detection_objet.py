@@ -69,8 +69,10 @@ COCO_CATEGORY_NAMES = [
 PASCAL_VOC_CLASSES = ['background','aeroplane','bicycle','bird','boat','bottle','bus','car','cat','chair','cow','diningtable','dog','horse',
 'motorbike','person','pottedplant','sheep','sofa','train','tvmonitor']
 
-ROOT_DIR = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/images"
-ANN_FILE = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/annotations/instances_train2014.json"
+# ROOT_DIR = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/images"
+ROOT_DIR = "/home/antract/streamlit/fete_science/coco/images"
+# ANN_FILE = "/lium/raid01_b/tprouteau/streamlit/fete_science/coco/annotations/instances_train2014.json"
+ANN_FILE = "/home/antract/streamlit/fete_science/coco/annotations/instances_train2014.json"
 
 # COLORS = np.random.uniform(0, 255, size=(len(COCO_CATEGORY_NAMES), 3)).astype(int)
 COLORS_COCO = np.array([[int(r * 255), int(g * 255), int(b * 255)] for r,g,b in seaborn.color_palette('pastel', n_colors=len(COCO_CATEGORY_NAMES))])
@@ -166,8 +168,14 @@ def app_dataset_explorer(dataset):
     st.image([np.array(image) for image in images])
     st.markdown("__Dataset COCO (Common Objects in Context)__ [https://cocodataset.org/](https://cocodataset.org/) sous licence Creative Commons Attribution 4.0. ")
 
-@st.cache(allow_output_mutation=True)
+_net = None
+
+# @st.cache(allow_output_mutation=True)
 def load_model(device, confidence_threshold, task):
+    global _net
+    if _net is not None:
+        del _net
+        torch.cuda.empty_cache()
     if task=="detection":
         _net = torchvision.models.detection.fasterrcnn_resnet50_fpn(
             pretrained=True,
@@ -179,10 +187,11 @@ def load_model(device, confidence_threshold, task):
         raise ValueError("Unknown task")
     _net.to(device)
     _net.eval()
+    torch.cuda.empty_cache()
     # print(_net.__dir__)
     # print(dir(_net))
     # _net.box_score_thresh = 0.1
-    return _net
+    # return _net
 
 
 def app_object_detection():
@@ -205,7 +214,7 @@ def app_object_detection():
         def __init__(self) -> None:
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             self.confidence_threshold = DEFAULT_CONFIDENCE_THRESHOLD
-            self._net = load_model(self.device, self.confidence_threshold, "detection")
+            load_model(self.device, self.confidence_threshold, "detection")
             self.result_queue = queue.Queue()
             self.invert_image = False
 
@@ -246,7 +255,8 @@ def app_object_detection():
             img_tensor = img_tensor[0:3]
             if self.old_counter == None or self.old_counter >= 8:
                 self.old_counter = 0
-                self.old_detection = self._net([img_tensor])
+                global _net
+                self.old_detection = _net([img_tensor])
             self.old_counter += 1
             # detections = self._net([img_tensor])
             annotated_image, result = self._annotate_image(img_tensor, self.old_detection[0], category_names=COCO_CATEGORY_NAMES)
@@ -320,10 +330,10 @@ def app_image_segmentation():
         def __init__(self) -> None:
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             print("LOADING MODEL")
-            self._net = load_model(self.device, 0, "segmentation")
+            _net = load_model(self.device, 0, "segmentation")
             self.result_queue = queue.Queue()
             self.invert_image = False
-            self._net = load_model(self.device, 0, "segmentation")
+            # self._net = load_model(self.device, 0, "segmentation")
             self.old_counter = None
             self.font = ImageFont.truetype(font='fonts/Roboto-Bold.ttf', size=FONT_SIZE)
 
@@ -357,7 +367,8 @@ def app_image_segmentation():
             input_batch = input_batch.to(self.device)
             if self.old_counter == None or self.old_counter >= 8:
                 self.old_counter = 0
-                self.old_detection = self._net(input_batch)
+                global _net
+                self.old_detection = _net(input_batch)
             self.old_counter += 1
             # detections = self._net([img_tensor])
             annotated_image, result = self._annotate_image(image, self.old_detection['out'][0].argmax(0), category_names=PASCAL_VOC_CLASSES)
