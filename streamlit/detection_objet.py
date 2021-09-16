@@ -56,7 +56,7 @@ COCO_CATEGORY_NAMES = [
     'train', 'camion', 'bateau', 'feu tricolore', 'bouche à incendie', 'N/A', 'panneau stop',
     'parcmètre', 'banc', 'oiseau', 'chat', 'chien', 'cheval', 'mouton', 'vache',
     'éléphant', 'ours', 'zèbre', 'girafe', 'N/A', 'sac à dos', 'parapluie', 'N/A', 'N/A',
-    'sac à main', 'cravate', 'valise', 'frisbee', 'skis', 'snowboard', 'ballon',
+    'sac à main', 'cravate', 'valise', 'frisbee', 'skis', 'snowboard', 'balle',
     'cerf-volant', 'batte de baseball', 'gant de baseball', 'skateboard', 'planche de surf', 'raquette de tennis',
     'bouteille', 'N/A', 'verre à vin', 'verre', 'fourchette', 'couteau', 'cuillère', 'bol',
     'banane', 'pomme', 'sandwich', 'orange', 'broccoli', 'carotte', 'hot dog', 'pizza',
@@ -325,11 +325,11 @@ def app_object_detection():
     https://github.com/robmarkcole/object-detection-app
     """
 
-    DEFAULT_CONFIDENCE_THRESHOLD = 0.8
+    DEFAULT_CONFIDENCE_THRESHOLD = 80
 
     class Detection(NamedTuple):
         name: str
-        prob: float
+        prob: str 
 
     class MobileNetSSDVideoProcessor(VideoProcessorBase):
         confidence_threshold: float
@@ -355,19 +355,19 @@ def app_object_detection():
 
             # Draw each bounding box in the target
             for box, label, score in zip(target['boxes'], target['labels'], target['scores']):
-                if score < self.confidence_threshold:
+                if score < (self.confidence_threshold / 100.0):
                     continue
                 box = box.detach().cpu().numpy()
                 category = label.cpu().numpy()
                 category_name =  COCO_CATEGORY_NAMES[category] if COCO_CATEGORY_NAMES else str(category)
-                label_str = f"{category_name} {score:1.2f}"
+                label_str = f"{category_name} {int(score*100)}%"
                 text_size = self.font.getsize(label_str)
                 box_color = tuple(COLORS_COCO[category])
                 text_color = (0, 0, 0)
                 draw.rectangle(box, outline=box_color)
                 draw.rectangle((box[0], box[1], box[0] + text_size[0], box[1] + text_size[1]), fill=box_color)
                 draw.text((box[0], box[1]), label_str, fill=text_color, font=self.font)
-                result.append(Detection(name=category_name, prob=round(float(score), 2)))
+                result.append(Detection(name=category_name, prob=f"{round(float(score), 2) * 100}%"))
             return im, result
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
@@ -403,7 +403,8 @@ def app_object_detection():
     confidence_threshold = DEFAULT_CONFIDENCE_THRESHOLD
 
     if webrtc_ctx.video_processor:
-        webrtc_ctx.video_processor.confidence_threshold = st.slider(label="Seuil de confiance minimal", step=0.05, min_value=0.1, max_value=1.0, value=DEFAULT_CONFIDENCE_THRESHOLD)
+        # webrtc_ctx.video_processor.confidence_threshold = st.slider(label="Seuil de confiance minimal", step=0.05, min_value=0.1, max_value=1.0, value=DEFAULT_CONFIDENCE_THRESHOLD)
+        webrtc_ctx.video_processor.confidence_threshold = st.slider(label="Seuil de confiance minimal", step=5, min_value=10, max_value=100, value=DEFAULT_CONFIDENCE_THRESHOLD)
         webrtc_ctx.video_processor.invert_image = st.sidebar.checkbox("Inverser l'image", value=True)
 
     if st.sidebar.checkbox("Montrer les objets détectés", value=True):
