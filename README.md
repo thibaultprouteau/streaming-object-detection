@@ -1,5 +1,3 @@
-[embed]https://github.com/thibaultprouteau/streaming-object-detection/blob/cd5e9d36029836131171d2c8268ff56853ebb8fb/Poster_D_monstration_F_te_de_la_Science-5.pdf[/embed]
-
 
 # Install
 
