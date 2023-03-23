@@ -1,3 +1,5 @@
+![Object detection poster](poster_object_detection.png)
+
 
 # Install
 
